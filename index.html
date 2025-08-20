@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Juego Stroop Multijugador</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: white;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    #colorBox {
+      width: 200px;
+      height: 200px;
+      margin: 20px 0;
+      border-radius: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 20px;
+      border: 2px solid white;
+      text-transform: uppercase;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(2, 120px);
+      gap: 15px;
+      margin-top: 10px;
+    }
+
+    .btn {
+      padding: 15px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      color: white;
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+
+    .btn:active { transform: scale(0.95); }
+
+    #result, #roundSummary {
+      margin-top: 15px;
+      font-size: 16px;
+      text-align: center;
+      white-space: pre-line;
+    }
+
+    #nextRoundBtn {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      background: #4caf50;
+      color: white;
+      cursor: pointer;
+      display: block;
+    }
+
+    #modeSelect, #playerSelect {
+      margin: 10px;
+      padding: 10px 15px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 8px;
+      border: 2px solid #4caf50;
+      background: #222;
+      color: #4caf50;
+      outline: none;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    #modeSelect:hover, #playerSelect:hover { background: #333; }
+
+    /* Pantalla de instrucciones */
+    #instructionScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 28px;
+      font-weight: bold;
+      text-align: center;
+      padding: 20px;
+      z-index: 1000;
+      display: none;
+    }
+
+    /* Tabla de resultados */
+    table {
+      margin-top: 20px;
+      border-collapse: collapse;
+      width: 90%;
+      max-width: 500px;
+    }
+    th, td {
+      border: 1px solid white;
+      padding: 8px;
+      text-align: center;
+    }
+    th { background: #333; }
+  </style>
+</head>
+<body>
+  <h1>Juego Stroop Multijugador</h1>
+  <p>Compite con tus amigos (máx. 5 jugadores)</p>
+
+  <select id="playerSelect">
+    <option value="1">👤 1 jugador</option>
+    <option value="2">👥 2 jugadores</option>
+    <option value="3">👥 3 jugadores</option>
+    <option value="4">👥 4 jugadores</option>
+    <option value="5">👥 5 jugadores</option>
+  </select>
+
+  <select id="modeSelect">
+    <option value="classic">🎨 Colores básicos</option>
+    <option value="tones">🎭 Tonalidades aleatorias</option>
+  </select>
+
+  <div id="colorBox">?</div>
+  <div class="buttons" id="buttonsContainer"></div>
+
+  <div id="result">Presiona "Iniciar ronda"</div>
+  <div id="roundSummary"></div>
+
+  <button id="nextRoundBtn">▶️ Iniciar ronda</button>
+  <div id="instructionScreen"></div>
+  <div id="scoreTable"></div>
+
+  <script>
+    const classicColors = [
+      {name: "Rojo", value: "red"},
+      {name: "Azul", value: "blue"},
+      {name: "Verde", value: "green"},
+      {name: "Amarillo", value: "gold"}
+    ];
+
+    const toneSets = {
+      Azul: [
+        {name: "Azul cielo", value: "#87CEEB"},
+        {name: "Azul marino", value: "#000080"},
+        {name: "Azul real", value: "#4169E1"},
+        {name: "Azul acero", value: "#4682B4"}
+      ],
+      Rojo: [
+        {name: "Carmesí", value: "#DC143C"},
+        {name: "Burdeos", value: "#800000"},
+        {name: "Coral", value: "#FF7F50"},
+        {name: "Rojo ladrillo", value: "#B22222"}
+      ]
+    };
+
+    let currentSet = [];
+    let currentColor = null;
+    let startTime = 0;
+    let playing = false;
+
+    let roundLength = 4;
+    let currentRound = 0;
+    let times = [];
+    let roundStart = 0;
+    let roundColors = [];
+    let currentToneSetName = "";
+
+    let rule = "color";
+
+    let players = 1;
+    let currentPlayer = 1;
+    let playerScores = [];
+
+    const colorBox = document.getElementById("colorBox");
+    const result = document.getElementById("result");
+    const roundSummary = document.getElementById("roundSummary");
+    const buttonsContainer = document.getElementById("buttonsContainer");
+    const nextRoundBtn = document.getElementById("nextRoundBtn");
+    const modeSelect = document.getElementById("modeSelect");
+    const playerSelect = document.getElementById("playerSelect");
+    const instructionScreen = document.getElementById("instructionScreen");
+    const scoreTable = document.getElementById("scoreTable");
+
+    function shuffle(array) {
+      return array.sort(() => Math.random() - 0.5);
+    }
+
+    function setupButtons(colors) {
+      buttonsContainer.innerHTML = "";
+      const shuffledColors = shuffle([...colors]);
+      shuffledColors.forEach((c, i) => {
+        const btn = document.createElement("button");
+        btn.classList.add("btn");
+        btn.style.background = c.value;
+        const other = colors[(i+1) % colors.length];
+        btn.textContent = other.name;
+        btn.addEventListener("click", () => checkAnswer({bg: c, label: other}));
+        buttonsContainer.appendChild(btn);
+      });
+    }
+
+    function showInstruction(callback) {
+      rule = Math.random() > 0.5 ? "color" : "name";
+      instructionScreen.textContent = rule === "color" 
+        ? "👉 Escoge el botón según el COLOR mostrado"
+        : "👉 Escoge el botón según el NOMBRE mostrado";
+      instructionScreen.style.display = "flex";
+      setTimeout(() => {
+        instructionScreen.style.display = "none";
+        callback();
+      }, 5000);
+    }
+
+    function newRound() {
+      times = [];
+      currentRound = 0;
+      roundStart = Date.now();
+      roundSummary.textContent = "";
+      result.textContent = `🎯 Jugador ${currentPlayer} en turno`;
+
+      if (modeSelect.value === "classic") {
+        currentSet = classicColors;
+        roundColors = shuffle([...currentSet]).slice(0, roundLength);
+      } else {
+        const toneKeys = Object.keys(toneSets);
+        currentToneSetName = toneKeys[Math.floor(Math.random() * toneKeys.length)];
+        currentSet = toneSets[currentToneSetName];
+        roundColors = shuffle([...currentSet]).slice(0, roundLength);
+        result.textContent = `🎭 Jugador ${currentPlayer}: tonos de ${currentToneSetName}`;
+      }
+
+      setupButtons(currentSet);
+      showInstruction(() => setTimeout(newAttempt, 1000));
+    }
+
+    function newAttempt() {
+      playing = true;
+      currentColor = roundColors[currentRound];
+
+      if (rule === "color") {
+        colorBox.style.background = currentColor.value;
+        colorBox.textContent = "";
+      } else {
+        const fake = currentSet[Math.floor(Math.random() * currentSet.length)];
+        colorBox.style.background = fake.value;
+        colorBox.textContent = currentColor.name;
+      }
+
+      startTime = Date.now();
+    }
+
+    function checkAnswer(btnInfo) {
+      if (!playing) return;
+      let correct = false;
+      if (rule === "color") correct = btnInfo.bg.value === currentColor.value;
+      else correct = btnInfo.label.name === currentColor.name;
+
+      if (correct) {
+        const reactionTime = (Date.now() - startTime) / 1000;
+        times.push(reactionTime);
+        currentRound++;
+        result.textContent = `✅ Correcto (${reactionTime.toFixed(2)}s) - Intento ${currentRound}/${roundLength}`;
+        if (currentRound < roundLength) {
+          const delay = Math.random() * 1500 + 500;
+          setTimeout(newAttempt, delay);
+        } else { endRound(); }
+      } else {
+        result.textContent = "❌ Te equivocaste, intenta de nuevo";
+      }
+    }
+
+    function endRound() {
+      playing = false;
+      const totalTime = (Date.now() - roundStart) / 1000;
+      playerScores.push({player: currentPlayer, time: totalTime});
+
+      let summary = `🏁 Jugador ${currentPlayer} completó su ronda\nTiempo total: ${totalTime.toFixed(2)}s`;
+      roundSummary.textContent = summary;
+
+      if (currentPlayer < players) {
+        currentPlayer++;
+        nextRoundBtn.textContent = `▶️ Turno Jugador ${currentPlayer}`;
+        nextRoundBtn.style.display = "block";
+      } else {
+        showResults();
+      }
+    }
+
+    function showResults() {
+      playerScores.sort((a,b) => a.time - b.time);
+      let tableHTML = `<h2>🏆 Resultados finales</h2><table><tr><th>Posición</th><th>Jugador</th><th>Tiempo (s)</th></tr>`;
+      playerScores.forEach((p, i) => {
+        tableHTML += `<tr><td>${i+1}</td><td>Jugador ${p.player}</td><td>${p.time.toFixed(2)}</td></tr>`;
+      });
+      tableHTML += "</table>";
+      scoreTable.innerHTML = tableHTML;
+      nextRoundBtn.textContent = "🔄 Reiniciar competencia";
+      nextRoundBtn.style.display = "block";
+      nextRoundBtn.onclick = () => resetGame();
+    }
+
+    function resetGame() {
+      currentPlayer = 1;
+      playerScores = [];
+      scoreTable.innerHTML = "";
+      nextRoundBtn.textContent = "▶️ Iniciar ronda";
+      nextRoundBtn.onclick = () => { nextRoundBtn.style.display = "none"; newRound(); };
+      nextRoundBtn.style.display = "block";
+    }
+
+    nextRoundBtn.onclick = () => { nextRoundBtn.style.display = "none"; newRound(); };
+    playerSelect.onchange = () => players = parseInt(playerSelect.value);
+    players = parseInt(playerSelect.value);
+  </script>
+</body>
+</html>
